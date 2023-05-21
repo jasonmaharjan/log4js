@@ -1,75 +1,89 @@
 let log4js = require("log4js");
 let logger = log4js.getLogger();
 
+// log levels: (TRACE, DEBUG, INFO, WARN, ERROR, FATAL)
 log4js.configure({
   appenders: {
     out: {
       type: "stdout",
       layout: {
         type: "pattern",
-        pattern: "%[[%p] [%d] %X{url} %X{roleId} %X{employeeId} %m%n %]",
+        pattern: "%[[%p] [%d] [%X{url}] [%X{roleId}] [%X{employeeId}] %m%n %]",
       },
     },
   },
   categories: {
-    default: { appenders: ["out"], level: "error" },
+    default: { appenders: ["out"], level: "debug" },
+    main: { appenders: ["out"], level: "warn" },
   },
 });
 
-const connect = () => log4js.connectLogger(log4js.getLogger("out"));
+const connect = () => log4js.connectLogger(log4js.getLogger("main"));
 
-// const renderLog = ({
-//   type,
-//   errorMsg,
-//   url = "",
-//   roleId = "",
-//   employeeId = "",
-// }) => {
-//   logger.addContext("url", url);
-//   logger.addContext("roleId", roleId);
-//   logger.addContext("employeeId", employeeId);
-
-//   if (type === "error") {
-//     logger.error(errorMsg);
-//   } else {
-//     logger.fatal(errorMsg);
-//   }
-
-//   //   switch (type) {
-//   //     case "warning":
-//   //       logger.warning(errorMsg);
-//   //       return;
-//   //     case "error":
-//   //       logger.error(errorMsg);
-//   //       return;
-//   //     case "fatal":
-//   //       logger.fatal(errorMsg);
-//   //       return;
-//   //     default:
-//   //       console.log(errorMsg);
-//   //       return;
-//   //   }
-// };
-
-const addContextToLog = ({ url, roleId, employeeId }) => {
+const addContextToLog = ({ url = "", roleId = "", employeeId = "" }) => {
   logger.addContext("url", url);
   logger.addContext("roleId", roleId);
   logger.addContext("employeeId", employeeId);
 };
 
-const warning = ({ errorMsg, url, roleId, employeeId }) => {
-  addContextToLog({ url, roleId, employeeId });
-  logger.warning(errorMsg);
+const messageToLog = (error = "", msg = "") => {
+  if (error) {
+    return typeof error === "object" && "message" in error
+      ? error.message
+      : error;
+  }
+
+  return typeof msg === "object" && "message" in msg ? msg.message : msg;
 };
 
-const error = ({ errorMsg, url, roleId, employeeId }) => {
-  addContextToLog({ url, roleId, employeeId });
-  logger.error(errorMsg);
-};
+function log({ error, type, req, res, message }) {
+  try {
+    const logMessage = messageToLog(error, message);
 
-const fatalError = ({ errorMsg, url, roleId, employeeId }) => {
-  addContextToLog({ url, roleId, employeeId });
-  logger.fatal(errorMsg);
-};
+    const params = {
+      url: req && req.originalUrl,
+      roleId: res && res.locals.selectedRole.id,
+      employeeId: res && res.locals.employee.id,
+    };
 
-module.exports = { connect, warning, error, fatalError };
+    switch (type) {
+      case "debug":
+        addContextToLog(params);
+        logger.debug(logMessage);
+        break;
+
+      case "info":
+        addContextToLog(params);
+        logger.info(logMessage);
+        break;
+
+      case "warn":
+        addContextToLog(params);
+        logger.warn(logMessage);
+        break;
+
+      case "error":
+        addContextToLog(params);
+        logger.error(logMessage);
+        break;
+
+      case "fatal":
+        addContextToLog(params);
+        logger.fatal(logMessage);
+        break;
+
+      default:
+        console.log(
+          typeof error === "object" && "message" in error
+            ? error.message
+            : error
+        );
+    }
+  } catch (err) {
+    console.log(
+      typeof error === "object" && "message" in error ? error.message : error
+    );
+  }
+}
+
+module.exports = { connect, log };
